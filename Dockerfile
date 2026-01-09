@@ -6,9 +6,13 @@ WORKDIR /app
 # Expose the default Ollama port
 EXPOSE 11434
 
-# Pull the model during build
-RUN ollama pull gemma3:270m
+# Install curl (needed for health check)
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Run the Ollama server
-CMD ["ollama", "serve"]
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Use entrypoint script to start server and pull model
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
