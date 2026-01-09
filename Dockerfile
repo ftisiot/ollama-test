@@ -7,7 +7,7 @@ WORKDIR /app
 EXPOSE 11434
 
 # Pull the model during build
-RUN ollama pull gemma3:1b
+RUN ollama pull gemma3:270m
 
 # Run the Ollama server
 CMD ["ollama", "serve"]
