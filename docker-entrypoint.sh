@@ -20,6 +20,7 @@ done
 echo "Ollama is ready. Pulling model..."
 # Pull the model
 ollama pull gemma3:270m
+ollama pull gemma3:1b
 
 echo "Model pulled successfully. Keeping server running..."
 # Keep the server running
