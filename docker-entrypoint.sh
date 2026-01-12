@@ -22,6 +22,12 @@ echo "Ollama is ready. Pulling model..."
 ollama pull gemma3:270m
 ollama pull gemma3:1b
 
-echo "Model pulled successfully. Keeping server running..."
-# Keep the server running
+echo "Model pulled successfully. Starting web interface..."
+# Start web server in the background
+cd /app && python3 -m http.server 8080 &
+
+echo "Web interface available at http://localhost:8080"
+echo "Ollama API available at http://localhost:11434"
+echo "Keeping servers running..."
+# Keep the servers running
 wait
