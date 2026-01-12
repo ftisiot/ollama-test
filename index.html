@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ollama Chat Interface</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -90,6 +91,126 @@
             color: #333;
             border: 1px solid #e0e0e0;
             border-bottom-left-radius: 4px;
+        }
+
+        /* Markdown styling */
+        .message.assistant .message-content h1,
+        .message.assistant .message-content h2,
+        .message.assistant .message-content h3,
+        .message.assistant .message-content h4,
+        .message.assistant .message-content h5,
+        .message.assistant .message-content h6 {
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+
+        .message.assistant .message-content h1 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 0.3em;
+        }
+
+        .message.assistant .message-content h2 {
+            font-size: 1.3em;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 0.3em;
+        }
+
+        .message.assistant .message-content h3 {
+            font-size: 1.1em;
+        }
+
+        .message.assistant .message-content p {
+            margin-bottom: 0.8em;
+        }
+
+        .message.assistant .message-content ul,
+        .message.assistant .message-content ol {
+            margin: 0.8em 0;
+            padding-left: 2em;
+        }
+
+        .message.assistant .message-content li {
+            margin: 0.3em 0;
+        }
+
+        .message.assistant .message-content code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            color: #e83e8c;
+        }
+
+        .message.assistant .message-content pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 0.8em 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.85em;
+            line-height: 1.5;
+        }
+
+        .message.assistant .message-content pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+            font-size: inherit;
+        }
+
+        .message.assistant .message-content blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 1em;
+            margin: 0.8em 0;
+            color: #666;
+            font-style: italic;
+        }
+
+        .message.assistant .message-content table {
+            border-collapse: collapse;
+            margin: 0.8em 0;
+            width: 100%;
+        }
+
+        .message.assistant .message-content table th,
+        .message.assistant .message-content table td {
+            border: 1px solid #e0e0e0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message.assistant .message-content table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .message.assistant .message-content a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .message.assistant .message-content a:hover {
+            text-decoration: underline;
+        }
+
+        .message.assistant .message-content hr {
+            border: none;
+            border-top: 1px solid #e0e0e0;
+            margin: 1em 0;
+        }
+
+        .message.assistant .message-content strong {
+            font-weight: 600;
+        }
+
+        .message.assistant .message-content em {
+            font-style: italic;
         }
 
         .input-container {
@@ -181,7 +302,7 @@
         <div class="chat-container" id="chatContainer">
             <div class="message assistant">
                 <div class="message-content">
-                    Hello! I'm ready to chat. What would you like to know?
+                    <p>Hello! I'm ready to chat. What would you like to know?</p>
                 </div>
             </div>
         </div>
@@ -209,7 +330,14 @@
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.textContent = content;
+            
+            if (isUser) {
+                // User messages: plain text
+                contentDiv.textContent = content;
+            } else {
+                // Assistant messages: render markdown
+                contentDiv.innerHTML = marked.parse(content);
+            }
             
             messageDiv.appendChild(contentDiv);
             chatContainer.appendChild(messageDiv);
