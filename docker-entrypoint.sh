@@ -22,12 +22,12 @@ echo "Ollama is ready. Pulling model..."
 ollama pull gemma3:270m
 ollama pull gemma3:1b
 
-echo "Model pulled successfully. Starting web interface..."
-# Start web server in the background
-cd /app && python3 -m http.server 8080 &
+echo "Model pulled successfully. Starting web interface with proxy..."
+# Start web server with proxy in the background
+cd /app && python3 server.py &
 
 echo "Web interface available at http://localhost:8080"
-echo "Ollama API available at http://localhost:11434"
+echo "Ollama API is proxied through the web interface"
 echo "Keeping servers running..."
 # Keep the servers running
 wait

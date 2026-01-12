@@ -201,7 +201,7 @@
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const modelSelect = document.getElementById('modelSelect');
-        const OLLAMA_API = 'http://localhost:11434/api/generate';
+        const OLLAMA_API = '/api/generate';
 
         function addMessage(content, isUser) {
             const messageDiv = document.createElement('div');
@@ -273,7 +273,7 @@
                 addMessage(data.response || 'No response received', false);
             } catch (error) {
                 removeLoadingMessage();
-                addMessage(`Error: ${error.message}. Make sure Ollama is running on port 11434.`, false);
+                addMessage(`Error: ${error.message}. Make sure the server is running.`, false);
                 console.error('Error:', error);
             } finally {
                 sendButton.disabled = false;

@@ -3,8 +3,8 @@ FROM ollama/ollama:latest
 # Set working directory
 WORKDIR /app
 
-# Expose the default Ollama port and web interface port
-EXPOSE 11434 8080
+# Expose only the web interface port
+EXPOSE 8080
 
 # Set Ollama to store models in /tmp
 ENV OLLAMA_MODELS=/tmp/models
@@ -15,8 +15,10 @@ RUN apt-get update && apt-get install -y curl python3 && rm -rf /var/lib/apt/lis
 # Create the models directory
 RUN mkdir -p /tmp/models
 
-# Copy web interface
+# Copy web interface and proxy server
 COPY index.html /app/index.html
+COPY server.py /app/server.py
+RUN chmod +x /app/server.py
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
