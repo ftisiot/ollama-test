@@ -323,6 +323,9 @@
         const sendButton = document.getElementById('sendButton');
         const modelSelect = document.getElementById('modelSelect');
         const OLLAMA_API = '/api/generate';
+        
+        // Store conversation history
+        const conversationHistory = [];
 
         function addMessage(content, isUser) {
             const messageDiv = document.createElement('div');
@@ -342,6 +345,12 @@
             messageDiv.appendChild(contentDiv);
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // Store in conversation history
+            conversationHistory.push({
+                role: isUser ? 'user' : 'assistant',
+                content: content
+            });
         }
 
         function addLoadingMessage() {
@@ -365,13 +374,38 @@
             }
         }
 
+        function buildPromptWithContext(currentMessage) {
+            let prompt = '';
+            
+            // Add previous conversation context as a list (excluding the current message)
+            if (conversationHistory.length > 0) {
+                prompt += 'Previous conversation context:\n\n';
+                conversationHistory.forEach((msg, index) => {
+                    if (msg.role === 'user') {
+                        prompt += `${index + 1}. Question: ${msg.content}\n`;
+                    } else {
+                        prompt += `   Answer: ${msg.content}\n\n`;
+                    }
+                });
+                prompt += '\n---\n\n';
+            }
+            
+            // Add current message
+            prompt += `Current question: ${currentMessage}`;
+            
+            return prompt;
+        }
+
         async function sendMessage() {
             const message = messageInput.value.trim();
             if (!message) return;
 
             const selectedModel = modelSelect.value;
             
-            // Add user message
+            // Build prompt with conversation context (before adding current message to history)
+            const promptWithContext = buildPromptWithContext(message);
+            
+            // Add user message to UI (this will also add it to history)
             addMessage(message, true);
             messageInput.value = '';
             sendButton.disabled = true;
@@ -387,7 +421,7 @@
                     },
                     body: JSON.stringify({
                         model: selectedModel,
-                        prompt: message,
+                        prompt: promptWithContext,
                         stream: false
                     })
                 });
@@ -398,7 +432,8 @@
 
                 const data = await response.json();
                 removeLoadingMessage();
-                addMessage(data.response || 'No response received', false);
+                const assistantResponse = data.response || 'No response received';
+                addMessage(assistantResponse, false);
             } catch (error) {
                 removeLoadingMessage();
                 addMessage(`Error: ${error.message}. Make sure the server is running.`, false);
