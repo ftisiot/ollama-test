@@ -7,7 +7,7 @@ A Dockerized web application that provides a beautiful, interactive chat interfa
 - 🤖 **Web-based Chat Interface** - Beautiful, modern UI for chatting with LLM models
 - 📝 **Markdown Rendering** - Properly renders markdown in LLM responses (code blocks, headers, lists, etc.)
 - 💬 **Conversation Context** - Automatically includes previous conversation history in each request
-- 🌐 **Web Browsing** - Browse web pages and include their content in LLM conversations
+- 🔍 **Automatic Web Browsing** - Automatically searches and browses the internet when LLM lacks information
 - 🔄 **Model Selection** - Switch between different models (gemma3:270m, gemma3:1b)
 - 🐳 **Dockerized** - Easy deployment with Docker
 - 🔒 **Single Port** - Only exposes port 8080 (Ollama API is proxied internally)
@@ -62,15 +62,19 @@ docker logs -f ollama-test
 
 The interface automatically includes previous conversation history in each request, allowing the LLM to maintain context across multiple messages. Previous questions and answers are formatted as a numbered list in the prompt.
 
-### Web Browsing
+### Automatic Web Browsing
 
-You can browse web pages and include their content in your conversations:
+The system automatically searches and browses the internet when the LLM indicates it doesn't have enough information:
 
-1. Enter a URL in the "Browse Web" input field (e.g., `example.com` or `https://example.com`)
-2. Click "Browse Web" or press Enter
-3. The page content will be displayed and automatically included in your next LLM request
-4. The LLM will have access to the web page content when answering your questions
-5. Click "Clear Context" to remove the web browsing context
+- When the LLM responds with phrases like "I don't know", "I'm not sure", or "I don't have access to", the system automatically:
+  1. Extracts a search query from your question
+  2. Performs a web search using DuckDuckGo to find relevant URLs
+  3. Automatically browses the top search result pages
+  4. Extracts content from the browsed pages
+  5. Provides the LLM with the browsed content
+  6. Generates an updated answer with the new information
+
+The browsed content is displayed in the chat, and the LLM uses it to provide comprehensive, up-to-date answers. This allows the LLM to provide current information even when it doesn't have it in its training data.
 
 **Note:** Web browsing extracts text content from web pages (up to 5000 characters) and includes it in the LLM prompt for context-aware responses.
 

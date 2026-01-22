@@ -36,8 +36,36 @@ class HTMLTextExtractor(HTMLParser):
 
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
+        # Web search endpoint
+        if self.path.startswith('/search?'):
+            try:
+                parsed_path = urllib.parse.urlparse(self.path)
+                params = urllib.parse.parse_qs(parsed_path.query)
+                query = params.get('q', [None])[0]
+                
+                if not query:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'error': 'Query parameter required'}).encode())
+                    return
+                
+                results = self._search_web(query)
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'query': query, 'results': results}).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
         # Web browsing endpoint
-        if self.path.startswith('/browse?'):
+        elif self.path.startswith('/browse?'):
             try:
                 parsed_path = urllib.parse.urlparse(self.path)
                 params = urllib.parse.parse_qs(parsed_path.query)
@@ -114,6 +142,85 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         if title_match:
             return title_match.group(1).strip()
         return "No title found"
+    
+    def _search_web(self, query, max_results=3):
+        """Search the web using DuckDuckGo HTML search"""
+        try:
+            # Use DuckDuckGo HTML search
+            search_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+            req = urllib.request.Request(search_url)
+            req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+            
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html_content = response.read().decode('utf-8', errors='ignore')
+                
+                # Extract search results - try multiple patterns
+                results = []
+                
+                # Pattern 1: Modern DuckDuckGo structure
+                patterns = [
+                    r'<a class="result__a"[^>]*href="([^"]+)"[^>]*>([^<]+)</a>',
+                    r'<a[^>]*class="[^"]*result[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</a>',
+                    r'<a[^>]*href="([^"]+)"[^>]*class="[^"]*result__a[^"]*"[^>]*>([^<]+)</a>',
+                ]
+                
+                matches = []
+                for pattern in patterns:
+                    matches = re.findall(pattern, html_content, re.IGNORECASE)
+                    if matches:
+                        break
+                
+                # If no matches, try simpler pattern
+                if not matches:
+                    # Look for any links with href
+                    link_pattern = r'<a[^>]*href="(https?://[^"]+)"[^>]*>([^<]+)</a>'
+                    all_links = re.findall(link_pattern, html_content, re.IGNORECASE)
+                    # Filter out common non-result links
+                    matches = [(url, title) for url, title in all_links 
+                              if not any(skip in url.lower() for skip in ['duckduckgo.com', 'javascript:', 'mailto:', '#'])]
+                
+                for i, (url, title) in enumerate(matches[:max_results]):
+                    if url.startswith('//'):
+                        url = 'https:' + url
+                    elif not url.startswith(('http://', 'https://')):
+                        continue
+                    
+                    # Clean title
+                    title = re.sub(r'<[^>]+>', '', title).strip()
+                    
+                    # Fetch and extract content from the result page
+                    try:
+                        page_req = urllib.request.Request(url)
+                        page_req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+                        with urllib.request.urlopen(page_req, timeout=8) as page_response:
+                            page_html = page_response.read().decode('utf-8', errors='ignore')
+                            parser = HTMLTextExtractor()
+                            parser.feed(page_html)
+                            content = parser.get_text()
+                            
+                            if len(content) > 2000:
+                                content = content[:2000] + "... [truncated]"
+                            
+                            results.append({
+                                'title': title,
+                                'url': url,
+                                'snippet': content
+                            })
+                    except Exception as e:
+                        # If we can't fetch the page, just include the title and URL
+                        results.append({
+                            'title': title,
+                            'url': url,
+                            'snippet': f'Content unavailable (Error: {str(e)[:50]})'
+                        })
+                
+                # If no results, return a helpful message
+                if not results:
+                    return [{'error': 'No search results found. Try a different query.'}]
+                
+                return results
+        except Exception as e:
+            return [{'error': f'Search failed: {str(e)}'}]
     
     def do_POST(self):
         # Proxy API requests to Ollama

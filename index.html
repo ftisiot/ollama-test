@@ -285,38 +285,6 @@
             outline: none;
         }
 
-        .browse-section {
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .browse-section input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .browse-section button {
-            padding: 8px 16px;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .browse-section button:hover {
-            background: #218838;
-        }
 
         .web-result {
             background: #e7f3ff;
@@ -353,15 +321,6 @@
                 <option value="gemma3:1b">gemma3:1b</option>
             </select>
         </div>
-        <div class="browse-section">
-            <input 
-                type="text" 
-                id="browseInput" 
-                placeholder="Enter URL to browse (e.g., example.com)"
-            >
-            <button id="browseButton">Browse Web</button>
-            <button id="clearBrowseButton" style="display: none; background: #dc3545; padding: 8px 16px; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">Clear Context</button>
-        </div>
         <div class="chat-container" id="chatContainer">
             <div class="message assistant">
                 <div class="message-content">
@@ -385,16 +344,10 @@
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const modelSelect = document.getElementById('modelSelect');
-        const browseInput = document.getElementById('browseInput');
-        const browseButton = document.getElementById('browseButton');
-        const clearBrowseButton = document.getElementById('clearBrowseButton');
         const OLLAMA_API = '/api/generate';
         
         // Store conversation history
         const conversationHistory = [];
-        
-        // Store web browsing results
-        let webBrowsingContext = null;
 
         function addMessage(content, isUser) {
             const messageDiv = document.createElement('div');
@@ -457,6 +410,77 @@
             }
         }
 
+        async function searchWeb(query) {
+            try {
+                const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error searching web:', error);
+                return { error: error.message, results: [] };
+            }
+        }
+
+        function needsMoreInfo(response) {
+            // Check if LLM response indicates it doesn't have enough information
+            const lowerResponse = response.toLowerCase();
+            const indicators = [
+                "i don't know",
+                "i'm not sure",
+                "i don't have",
+                "i cannot",
+                "i can't",
+                "i don't have access",
+                "i don't have information",
+                "i don't have enough",
+                "i'm not able",
+                "i'm unable",
+                "i lack",
+                "i don't possess",
+                "i'm not aware",
+                "i don't recall",
+                "i'm not familiar",
+                "i don't have the",
+                "i don't have current",
+                "i don't have recent",
+                "i don't have up-to-date",
+                "i don't have the latest",
+                "i don't have access to",
+                "i cannot access",
+                "i don't have real-time",
+                "i don't have live",
+                "i don't have current information",
+                "i don't have recent information",
+                "i don't have up-to-date information",
+                "i don't have the latest information"
+            ];
+            
+            return indicators.some(indicator => lowerResponse.includes(indicator));
+        }
+
+        function extractSearchQuery(userMessage, llmResponse) {
+            // Extract a search query from the user's message
+            // Remove common question words and keep the main topic
+            let query = userMessage;
+            
+            // Remove question words
+            query = query.replace(/^(what|who|when|where|why|how|is|are|can|could|would|should|do|does|did)\s+/i, '');
+            
+            // Remove trailing question mark
+            query = query.replace(/\?$/, '');
+            
+            // Limit length
+            if (query.length > 100) {
+                query = query.substring(0, 100);
+            }
+            
+            return query.trim();
+        }
+
+
         function displayWebResult(result) {
             if (result.error) {
                 addMessage(`Error browsing web: ${result.error}`, false);
@@ -478,15 +502,15 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        function buildPromptWithContext(currentMessage) {
+        function buildPromptWithContext(currentMessage, webContext = null) {
             let prompt = '';
             
             // Add web browsing context if available
-            if (webBrowsingContext && !webBrowsingContext.error) {
+            if (webContext && !webContext.error) {
                 prompt += 'Web browsing information:\n';
-                prompt += `URL: ${webBrowsingContext.url}\n`;
-                prompt += `Title: ${webBrowsingContext.title}\n`;
-                prompt += `Content: ${webBrowsingContext.content}\n\n`;
+                prompt += `URL: ${webContext.url}\n`;
+                prompt += `Title: ${webContext.title}\n`;
+                prompt += `Content: ${webContext.content}\n\n`;
                 prompt += '---\n\n';
             }
             
@@ -544,13 +568,86 @@
                 }
 
                 const data = await response.json();
-                removeLoadingMessage();
                 const assistantResponse = data.response || 'No response received';
-                addMessage(assistantResponse, false);
                 
-                // Clear web browsing context after use (optional - comment out if you want to keep it)
-                // webBrowsingContext = null;
-                // clearBrowseButton.style.display = 'none';
+                // Check if LLM needs more information
+                if (needsMoreInfo(assistantResponse)) {
+                    removeLoadingMessage();
+                    addMessage(assistantResponse + '\n\n🔍 Searching and browsing the web for more information...', false);
+                    
+                    // Perform web search to find relevant URLs
+                    const searchQuery = extractSearchQuery(message, assistantResponse);
+                    const searchData = await searchWeb(searchQuery);
+                    
+                    if (searchData.results && searchData.results.length > 0) {
+                        // Browse the top search result URLs
+                        const browsedContent = [];
+                        const maxBrowse = Math.min(2, searchData.results.length); // Browse top 2 results
+                        
+                        for (let i = 0; i < maxBrowse; i++) {
+                            const result = searchData.results[i];
+                            if (result.url) {
+                                try {
+                                    const browseResult = await browseWeb(result.url);
+                                    if (browseResult && !browseResult.error) {
+                                        browsedContent.push(browseResult);
+                                        
+                                        // Display browsed content
+                                        displayWebResult(browseResult);
+                                    }
+                                } catch (error) {
+                                    console.error('Error browsing URL:', error);
+                                }
+                            }
+                        }
+                        
+                        if (browsedContent.length > 0) {
+                            // Combine all browsed content
+                            let combinedContent = 'Web browsing information from multiple sources:\n\n';
+                            browsedContent.forEach((content, idx) => {
+                                combinedContent += `Source ${idx + 1}:\n`;
+                                combinedContent += `URL: ${content.url}\n`;
+                                combinedContent += `Title: ${content.title}\n`;
+                                combinedContent += `Content: ${content.content}\n\n`;
+                            });
+                            
+                            // Ask LLM again with browsed content
+                            addLoadingMessage();
+                            const enhancedPrompt = buildPromptWithContext(message) + 
+                                '\n\n' + combinedContent + 
+                                '\n\nPlease provide a comprehensive answer using the information from the web sources above.';
+                            
+                            const enhancedResponse = await fetch(OLLAMA_API, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    model: selectedModel,
+                                    prompt: enhancedPrompt,
+                                    stream: false
+                                })
+                            });
+                            
+                            if (enhancedResponse.ok) {
+                                const enhancedData = await enhancedResponse.json();
+                                removeLoadingMessage();
+                                const enhancedAnswer = enhancedData.response || 'No response received';
+                                addMessage('📚 Updated answer with information from web sources:\n\n' + enhancedAnswer, false);
+                            } else {
+                                removeLoadingMessage();
+                                addMessage('Error getting enhanced response with web browsing results.', false);
+                            }
+                        } else {
+                            addMessage('Could not browse the search results. Please try rephrasing your question.', false);
+                        }
+                    } else {
+                        addMessage('No search results found. Please try rephrasing your question.', false);
+                    }
+                } else {
+                    removeLoadingMessage();
+                    addMessage(assistantResponse, false);
+                }
             } catch (error) {
                 removeLoadingMessage();
                 addMessage(`Error: ${error.message}. Make sure the server is running.`, false);
@@ -561,40 +658,6 @@
             }
         }
 
-        // Browse web button handler
-        browseButton.addEventListener('click', async () => {
-            const url = browseInput.value.trim();
-            if (!url) return;
-            
-            browseButton.disabled = true;
-            browseButton.textContent = 'Browsing...';
-            
-            const result = await browseWeb(url);
-            webBrowsingContext = result;
-            displayWebResult(result);
-            
-            // Show clear button if browsing was successful
-            if (!result.error) {
-                clearBrowseButton.style.display = 'block';
-            }
-            
-            browseInput.value = '';
-            browseButton.disabled = false;
-            browseButton.textContent = 'Browse Web';
-        });
-
-        // Clear web browsing context
-        clearBrowseButton.addEventListener('click', () => {
-            webBrowsingContext = null;
-            clearBrowseButton.style.display = 'none';
-            addMessage('Web browsing context cleared.', false);
-        });
-
-        browseInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !browseButton.disabled) {
-                browseButton.click();
-            }
-        });
 
         // Event listeners
         sendButton.addEventListener('click', sendMessage);
